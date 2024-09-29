@@ -1,0 +1,1115 @@
+001   0000                 .org 0
+002   0000             _p00_config	=	0x0000
+003   0000             _p03_set	=	0x0003
+004   0000             _p04_RAM0	=	0x0004
+005   0000             _p05_RAM1	=	0x0005
+006   0000             _p06_RAM2	=	0x0006
+007   0000             _p07_set	=	0x0007
+008   0000             _p0a_mem_man	=	0x000a
+009   0000             _p0b_set	=	0x000b
+010   0000             _p1d_set	=	0x001d
+011   0000             _p3b_set	=	0x003b
+012   0000             _pfa_vbank	=	0x00fa
+013   0000             _pfc_color_reg	=	0x00fc
+014   0000             _pf8_vmode	=	0xf8
+015   0000             
+016   0000             CONFIG_TURBO_BIT = 3
+017   0000             CONFIG_WIDE_BIT = 4
+018   0000             CONFIG_MEM_TEST_BIT = 5
+019   0000             
+020   0000             MEMM_RAM0EN_BIT = 0
+021   0000             MEMM_RAM1EN_BIT = 1
+022   0000             MEMM_RAM2EN_BIT = 2
+023   0000             MEMM_TURBO_BIT = 5
+024   0000             VB_WIDE_BIT = 7
+025   0000             
+026   0000             VBANK_START = 0xc000
+027   0000             RAM1_WINDOW = 0x4000
+028   0000             
+029   0000             TEST_16C_PALLETE = 0x5f
+030   0000             
+031   0000             TEST_VBANK_IDX = 0x00
+032   0000             
+033   0000             ; registers global:
+034   0000             ;   B - configuration switches
+035   0000             ;   C - phase (0x00/0xFF)
+036   0000             
+037   0000             init:
+038   0000 31 FF 3F        ld sp, 0x3fff
+039   0003 3E 98           ld	a, 0x98
+040   0005 D3 03           out	(_p03_set), a
+041   0007 3E 80           ld	a, 0x80
+042   0009 D3 07           out	(_p07_set), a
+043   000B 3E 80           ld	a, 0x80
+044   000D D3 0B           out	(_p0b_set), a
+045   000F 3E 92           ld	a, 0x92
+046   0011 D3 1D           out	(_p1d_set), a
+047   0013 3E 16           ld	a, 0x16
+048   0015 D3 3B           out	(_p3b_set), a
+049   0017 3E 56           ld	a, 0x56
+050   0019 D3 3B           out	(_p3b_set), a
+051   001B 3E 96           ld	a, 0x96
+052   001D D3 3B           out	(_p3b_set), a
+053   001F 3E 10           ld	a, 0x10
+054   0021 D3 0A           out	(_p0a_mem_man), a
+055   0023 3E 00           ld	a, 0x00
+056   0025 D3 F8           out	(_pf8_vmode), a
+057   0027 C3 BD 00    	jp		fill_vmem
+058   002A             
+059   002A             main:
+060   002A DB 00           in      a, (_p00_config)
+061   002C 47              ld      b, a        ; save configuration to B
+062   002D C3 E4 00        jp      set_turbo
+063   0030             main_turbo:
+064   0030 3E 00           ld      a, TEST_VBANK_IDX
+065   0032 C3 F3 00        jp      set_vbank   ; set video bank to 0 (0xC000-0xFFFF)
+066   0035             main_vbank:
+067   0035 CB 68           bit     CONFIG_MEM_TEST_BIT, b
+068   0037 20 55           jr      NZ, mem_test
+069   0039             main_memt:
+070   0039 78              ld      a, b        ; load configuretion to A
+071   003A E6 07           and     0x07        ; extract video test number
+072   003C 26 00           ld      h, 0
+073   003E 6F              ld      l, a
+074   003F 29              add     hl, hl
+075   0040 11 AD 00        ld      de, video_tests
+076   0043 19              add     hl, de
+077   0044 7E              ld      a, (hl)
+078   0045 23              inc     hl
+079   0046 66              ld      h, (hl)
+080   0047 6F              ld      l, a
+081   0048 E9              jp      (hl)
+082   0049             main_video_end:
+083   0049 11 6B 00    	ld		de, TEST_TITLE
+084   004C FD 26 00    	ld		iyh, 0
+085   004F FD 2E 1C    	ld		iyl, 28
+086   0052 21 58 00    	ld		hl, main_title_end
+087   0055 C3 4D 05    	jp		print_str
+088   0058             main_title_end:
+089   0058                 ; wait loop
+090   0058 16 00           ld      d, 0
+091   005A             wait_loop0:
+092   005A 14          	inc		d
+093   005B 21 00 00        ld      hl, 0x0000
+094   005E             wait_loop1:
+095   005E 23          	inc		hl
+096   005F 7C          	ld		a, h
+097   0060 D6 80       	sub		a, 0x80
+098   0062 38 FA           jr      C, wait_loop1
+099   0064 7A          	ld		a, d
+100   0065 D6 04       	sub		a, 4
+101   0067 38 F1           jr      C, wait_loop0
+102   0069 18 BF           jr      main
+103   006B             
+104   006B             TEST_TITLE:
+105   006B             	.db "ORION-128 NG tests (andreil, 2020)", 0x00
+105   006B 4F52494F4E2D313238204E472074657374732028616E647265696C2C20323032
+105   008B 302900
+106   008E             
+107   008E             mem_test:
+108   008E                 ; monochrome video mode
+109   008E 3E 00           ld      a, VMODE_2COLOR_1PALLETE
+110   0090 D3 F8           out     (_pf8_vmode), a
+111   0092                 ; disable widescreen
+112   0092 3E 00           ld      a, TEST_VBANK_IDX
+113   0094 D3 FA           out     (_pfa_vbank), a
+114   0096                 ; enable turbo mode
+115   0096 DB 0A           in      a, (_p0a_mem_man)
+116   0098 CB EF           set     MEMM_TURBO_BIT, a
+117   009A D3 0A           out     (_p0a_mem_man), a
+118   009C             mem_test_main_loop:
+119   009C                 ; draw screen
+120   009C 11 6B 00    	ld		de, TEST_TITLE
+121   009F FD 26 00    	ld		iyh, 0
+122   00A2 FD 2E 1F    	ld		iyl, 31
+123   00A5 21 58 00    	ld		hl, main_title_end
+124   00A8 C3 4D 05    	jp		print_str
+125   00AB 18 EF           jr      mem_test_main_loop
+126   00AD             
+127   00AD             video_tests:
+128   00AD 26 02           .DW test_2colors_pallet1
+129   00AF 3C 02           .DW test_2colors_pallet2
+130   00B1 52 02           .DW test_4colors_pallet1
+131   00B3 6B 02           .DW test_4colors_pallet2
+132   00B5 84 02           .DW test_16colors_group
+133   00B7 9D 02           .DW test_16colors_pallet
+134   00B9 B7 02           .DW test_3bit
+135   00BB D3 02           .DW test_4bit
+136   00BD             
+137   00BD             fill_vmem:
+138   00BD             	; enable window on RAM1
+139   00BD DB 0A       	in		a, (_p0a_mem_man)
+140   00BF CB CF       	set		MEMM_RAM1EN_BIT, a
+141   00C1 D3 0A       	out		(_p0a_mem_man), a
+142   00C3 0E 00       	ld		c, 0
+143   00C5             	; set RAM 1 segment
+144   00C5             loop_seg:
+145   00C5 79          	ld		a, c
+146   00C6 D3 05       	out		(_p05_RAM1), a
+147   00C8             	; screen pointer
+148   00C8 21 00 40    	ld		hl, RAM1_WINDOW
+149   00CB 16 00       	ld		d, 00
+150   00CD             loop_vm:
+151   00CD 72              ld      (hl), d
+152   00CE 23              inc     hl
+153   00CF             	; check end
+154   00CF 7C          	ld		a, h
+155   00D0 FE 80       	cp		0x80
+156   00D2 20 F9           jr      NZ, loop_vm
+157   00D4 79          	ld		a, c
+158   00D5 0C          	inc		c
+159   00D6 FE 10       	cp		16
+160   00D8 20 EB           jr      NZ, loop_seg
+161   00DA             	; disable window on RAM1
+162   00DA DB 0A       	in		a, (_p0a_mem_man)
+163   00DC CB 8F       	res		MEMM_RAM1EN_BIT, a
+164   00DE 00          	nop
+165   00DF D3 0A       	out		(_p0a_mem_man), a
+166   00E1 C3 2A 00    	jp main
+167   00E4             
+168   00E4             set_turbo:
+169   00E4 DB 0A           in      a, (_p0a_mem_man)
+170   00E6 CB AF           res     MEMM_TURBO_BIT, a
+171   00E8 CB 58           bit     CONFIG_TURBO_BIT, b
+172   00EA 28 02           jr      Z, turbo_not_set
+173   00EC CB EF           set     MEMM_TURBO_BIT, a
+174   00EE             turbo_not_set:
+175   00EE D3 0A           out     (_p0a_mem_man), a
+176   00F0 C3 30 00        jp      main_turbo
+177   00F3             
+178   00F3             set_vbank:
+179   00F3 CB 60           bit     CONFIG_WIDE_BIT, b
+180   00F5 20 02           jr      NZ, wide_not_set
+181   00F7 CB FF           set     VB_WIDE_BIT, a
+182   00F9             wide_not_set:
+183   00F9 D3 FA           out     (_pfa_vbank), a
+184   00FB C3 35 00        jp      main_vbank
+185   00FE             
+186   00FE             VMODE_2COLOR_1PALLETE = 0x00
+187   00FE             VMODE_2COLOR_2PALLETE = 0x01
+188   00FE             VMODE_4COLOR_1PALLETE = 0x04
+189   00FE             VMODE_4COLOR_2PALLETE = 0x05
+190   00FE             VMODE_16COLOR_GROUP   = 0x06
+191   00FE             VMODE_16COLOR_PALLET  = 0x0e
+192   00FE             VMODE_3BIT			  = 0x10
+193   00FE             VMODE_4BIT			  = 0x14
+194   00FE             
+195   00FE             VIDEO_TEST_0_TITLE:
+196   00FE             	.db "TEST: 2 colors, pallete 1           ", 0x00
+196   00FE 544553543A203220636F6C6F72732C2070616C6C657465203120202020202020
+196   011E 2020202000
+197   0123             VIDEO_TEST_1_TITLE:
+198   0123             	.db "TEST: 2 colors, pallete 2           ", 0x00
+198   0123 544553543A203220636F6C6F72732C2070616C6C657465203220202020202020
+198   0143 2020202000
+199   0148             VIDEO_TEST_2_TITLE:
+200   0148             	.db "TEST: 4 colors, pallete 1           ", 0x00
+200   0148 544553543A203420636F6C6F72732C2070616C6C657465203120202020202020
+200   0168 2020202000
+201   016D             VIDEO_TEST_3_TITLE:
+202   016D             	.db "TEST: 4 colors, pallete 2           ", 0x00
+202   016D 544553543A203420636F6C6F72732C2070616C6C657465203220202020202020
+202   018D 2020202000
+203   0192             VIDEO_TEST_4_TITLE:
+204   0192             	.db "TEST: 16 colors, group              ", 0x00
+204   0192 544553543A20313620636F6C6F72732C2067726F757020202020202020202020
+204   01B2 2020202000
+205   01B7             VIDEO_TEST_5_TITLE:
+206   01B7             	.db "TEST: 16 colors, pallete (port 0xFC)", 0x00
+206   01B7 544553543A20313620636F6C6F72732C2070616C6C6574652028706F72742030
+206   01D7 7846432900
+207   01DC             VIDEO_TEST_6_TITLE:
+208   01DC             	.db "TEST: 3bit colors                   ", 0x00
+208   01DC 544553543A203362697420636F6C6F7273202020202020202020202020202020
+208   01FC 2020202000
+209   0201             VIDEO_TEST_7_TITLE:
+210   0201             	.db "TEST: 4bit colors                   ", 0x00
+210   0201 544553543A203462697420636F6C6F7273202020202020202020202020202020
+210   0221 2020202000
+211   0226             
+212   0226             test_2colors_pallet1:
+213   0226 3E 00           ld      a, VMODE_2COLOR_1PALLETE
+214   0228 D3 F8           out     (_pf8_vmode), a
+215   022A C3 02 03        jp      fill_scr_1
+216   022D             test_2colors_pallet1_end:
+217   022D 11 FE 00    	ld		de, VIDEO_TEST_0_TITLE
+218   0230 FD 26 00    	ld		iyh, 0
+219   0233 FD 2E 1D    	ld		iyl, 29
+220   0236 21 49 00    	ld		hl, main_video_end
+221   0239 C3 4D 05    	jp		print_str
+222   023C             
+223   023C             test_2colors_pallet2:
+224   023C 3E 01           ld      a, VMODE_2COLOR_2PALLETE
+225   023E D3 F8           out     (_pf8_vmode), a
+226   0240 C3 02 03        jp      fill_scr_1
+227   0243             test_2colors_pallet2_end:
+228   0243 11 23 01    	ld		de, VIDEO_TEST_1_TITLE
+229   0246 FD 26 00    	ld		iyh, 0
+230   0249 FD 2E 1D    	ld		iyl, 29
+231   024C 21 49 00    	ld		hl, main_video_end
+232   024F C3 4D 05    	jp		print_str
+233   0252             
+234   0252             test_4colors_pallet1:
+235   0252 3E 04           ld      a, VMODE_4COLOR_1PALLETE
+236   0254 D3 F8           out     (_pf8_vmode), a
+237   0256 C3 02 03        jp      fill_scr_1
+238   0259             test_4colors_pallet1_end:
+239   0259 C3 7F 03    	jp		fill_scr_2_4c
+240   025C             test_4colors_pallet1_end2:
+241   025C 11 48 01    	ld		de, VIDEO_TEST_2_TITLE
+242   025F FD 26 00    	ld		iyh, 0
+243   0262 FD 2E 1D    	ld		iyl, 29
+244   0265 21 49 00    	ld		hl, main_video_end
+245   0268 C3 4D 05    	jp		print_str
+246   026B             
+247   026B             test_4colors_pallet2:
+248   026B 3E 05           ld      a, VMODE_4COLOR_2PALLETE
+249   026D D3 F8           out     (_pf8_vmode), a
+250   026F C3 02 03        jp      fill_scr_1
+251   0272             test_4colors_pallet2_end:
+252   0272 C3 7F 03    	jp		fill_scr_2_4c
+253   0275             test_4colors_pallet2_end2:
+254   0275 11 6D 01    	ld		de, VIDEO_TEST_3_TITLE
+255   0278 FD 26 00    	ld		iyh, 0
+256   027B FD 2E 1D    	ld		iyl, 29
+257   027E 21 49 00    	ld		hl, main_video_end
+258   0281 C3 4D 05    	jp		print_str
+259   0284             
+260   0284             test_16colors_group:
+261   0284 3E 06           ld      a, VMODE_16COLOR_GROUP
+262   0286 D3 F8           out     (_pf8_vmode), a
+263   0288 C3 02 03        jp      fill_scr_1
+264   028B             test_16colors_group_end:
+265   028B C3 CA 03    	jp		fill_scr_2_16c
+266   028E             test_16colors_group_end2:
+267   028E 11 92 01    	ld		de, VIDEO_TEST_4_TITLE
+268   0291 FD 26 00    	ld		iyh, 0
+269   0294 FD 2E 1D    	ld		iyl, 29
+270   0297 21 49 00    	ld		hl, main_video_end
+271   029A C3 4D 05    	jp		print_str
+272   029D             
+273   029D             test_16colors_pallet:
+274   029D 3E 0E           ld      a, VMODE_16COLOR_PALLET
+275   029F D3 F8           out     (_pf8_vmode), a
+276   02A1 C3 02 03        jp      fill_scr_1
+277   02A4             test_16colors_pallet_end:
+278   02A4 3E 5F       	ld		a, TEST_16C_PALLETE
+279   02A6 D3 FC       	out		(_pfc_color_reg), a
+280   02A8             test_16colors_pallet_end2:
+281   02A8 11 B7 01    	ld		de, VIDEO_TEST_5_TITLE
+282   02AB FD 26 00    	ld		iyh, 0
+283   02AE FD 2E 1D    	ld		iyl, 29
+284   02B1 21 49 00    	ld		hl, main_video_end
+285   02B4 C3 4D 05    	jp		print_str
+286   02B7             
+287   02B7             test_3bit:
+288   02B7 3E 10           ld      a, VMODE_3BIT
+289   02B9 D3 F8           out     (_pf8_vmode), a
+290   02BB C3 02 03        jp      fill_scr_1
+291   02BE             test_3bit_end:
+292   02BE C3 47 04    	jp		fill_scr_blue
+293   02C1             test_3bit_end3:
+294   02C1 C3 C3 04    	jp		fill_scr_red
+295   02C4             test_3bit_end4:
+296   02C4 11 DC 01    	ld		de, VIDEO_TEST_6_TITLE
+297   02C7 FD 26 00    	ld		iyh, 0
+298   02CA FD 2E 1D    	ld		iyl, 29
+299   02CD 21 49 00    	ld		hl, main_video_end
+300   02D0 C3 4D 05    	jp		print_str
+301   02D3             
+302   02D3             test_4bit:
+303   02D3 3E 14           ld      a, VMODE_4BIT
+304   02D5 D3 F8           out     (_pf8_vmode), a
+305   02D7 C3 02 03        jp      fill_scr_1
+306   02DA             test_4bit_end:
+307   02DA             	; fill I
+308   02DA C3 7F 03    	jp		fill_scr_2_4c
+309   02DD             test_4bit_end2:
+310   02DD C3 47 04    	jp		fill_scr_blue
+311   02E0             test_4bit_end3:
+312   02E0 C3 C3 04    	jp		fill_scr_red
+313   02E3             test_4bit_end4:
+314   02E3 11 01 02    	ld		de, VIDEO_TEST_7_TITLE
+315   02E6 FD 26 00    	ld		iyh, 0
+316   02E9 FD 2E 1D    	ld		iyl, 29
+317   02EC 21 49 00    	ld		hl, main_video_end
+318   02EF C3 4D 05    	jp		print_str
+319   02F2             
+320   02F2             test_ret_table:
+321   02F2 2D 02           .DW test_2colors_pallet1_end
+322   02F4 43 02           .DW test_2colors_pallet2_end
+323   02F6 59 02           .DW test_4colors_pallet1_end
+324   02F8 72 02           .DW test_4colors_pallet2_end
+325   02FA 8B 02           .DW test_16colors_group_end
+326   02FC A4 02           .DW test_16colors_pallet_end
+327   02FE BE 02           .DW test_3bit_end
+328   0300 DA 02           .DW test_4bit_end
+329   0302             
+330   0302             fill_scr_1:
+331   0302             ; usage:
+332   0302             ;  hl - screen pointer
+333   0302             ;  de - temp
+334   0302 21 00 C0        ld      hl, VBANK_START
+335   0305             loop_f1_col:
+336   0305 2E 00           ld      l, 0
+337   0307             loop_f1_row:
+338   0307 36 FF           ld      (hl), 0xff
+339   0309 23              inc     hl
+340   030A 36 81           ld      (hl), 0x81
+341   030C 23              inc     hl
+342   030D 36 81           ld      (hl), 0x81
+343   030F 23              inc     hl
+344   0310 36 81           ld      (hl), 0x81
+345   0312 23              inc     hl
+346   0313 36 81           ld      (hl), 0x81
+347   0315 23              inc     hl
+348   0316 36 81           ld      (hl), 0x81
+349   0318 23              inc     hl
+350   0319 36 81           ld      (hl), 0x81
+351   031B 23              inc     hl
+352   031C 36 FF           ld      (hl), 0xff
+353   031E 23              inc     hl
+354   031F             	; check column end
+355   031F 7D          	ld		a, l
+356   0320 FE E0       	cp		0xe0
+357   0322 38 E3           jr      C, loop_f1_row
+358   0324 11 20 00        ld      de, 0x0020
+359   0327 7C          	ld		a, h
+360   0328 19              add     hl, de
+361   0329             	; check row end
+362   0329 FE FF       	cp		0xff
+363   032B 20 D8           jr      NZ, loop_f1_col
+364   032D             	; print column numbers
+365   032D 16 00       	ld		d, 0
+366   032F 21 00 00    	ld		hl, 0	; h=*10 , l=*1
+367   0332             fill1_nbrs:
+368   0332 7D          	ld		a, l
+369   0333 C6 30       	add		a, '0'
+370   0335 FD 62       	ld		iyh, d
+371   0337 FD 2E 1F    	ld		iyl, 31
+372   033A DD 21 41 03 	ld		ix, fill1_enbrs1
+373   033E C3 2F 05    	jp		print_chr
+374   0341             fill1_enbrs1:
+375   0341 7C          	ld		a, h
+376   0342 C6 30       	add		a, '0'
+377   0344 FD 62       	ld		iyh, d
+378   0346 FD 2E 1E    	ld		iyl, 30
+379   0349 DD 21 50 03 	ld		ix, fill1_enbrs2
+380   034D C3 2F 05    	jp		print_chr
+381   0350             fill1_enbrs2:
+382   0350 2C          	inc		l
+383   0351 7D          	ld		a, l
+384   0352 FE 0A       	cp		10
+385   0354 38 03       	jr		C, fill1_nnbrs
+386   0356 24          	inc		h
+387   0357 2E 00       	ld		l, 0
+388   0359             fill1_nnbrs:
+389   0359 14          	inc		d
+390   035A 7A          	ld		a, d
+391   035B FE 40       	cp		64
+392   035D 38 D3       	jr		C, fill1_nbrs
+393   035F             fill1_end:
+394   035F                 ; return to test
+395   035F 78              ld      a, b        ; load configuration to A
+396   0360 E6 07           and     0x07        ; extract video test number
+397   0362 26 00           ld      h, 0
+398   0364 6F              ld      l, a
+399   0365 29              add     hl, hl
+400   0366 11 F2 02        ld      de, test_ret_table
+401   0369 19              add     hl, de
+402   036A 7E              ld      a, (hl)
+403   036B 23              inc     hl
+404   036C 66              ld      h, (hl)
+405   036D 6F              ld      l, a
+406   036E E9              jp      (hl)
+407   036F             
+408   036F             test_ret_table_2:
+409   036F 00 00           .DW 0
+410   0371 00 00           .DW 0
+411   0373 5C 02           .DW test_4colors_pallet1_end2
+412   0375 75 02           .DW test_4colors_pallet2_end2
+413   0377 8E 02           .DW test_16colors_group_end2
+414   0379 00 00           .DW 0
+415   037B 00 00           .DW 0
+416   037D DD 02           .DW test_4bit_end2
+417   037F             
+418   037F             fill_scr_2_4c:
+419   037F             	; enable window on RAM1
+420   037F DB 0A       	in		a, (_p0a_mem_man)
+421   0381 CB CF       	set		MEMM_RAM1EN_BIT, a
+422   0383 D3 0A       	out		(_p0a_mem_man), a
+423   0385             	; set RAM 1 to segment #7
+424   0385 3E 07       	ld		a, 7
+425   0387 D3 05       	out		(_p05_RAM1), a
+426   0389             	; screen pointer
+427   0389 21 00 40    	ld		hl, RAM1_WINDOW
+428   038C 16 00       	ld		d, 0 ; columns
+429   038E             fill2_row:
+430   038E             	; col N
+431   038E 3E 00       	ld		a, 0
+432   0390             fill2_sr1:
+433   0390 36 FF       	ld		(hl), 0xff
+434   0392 23          	inc		hl
+435   0393 3C          	inc		a
+436   0394 FE E0       	cp		0xe0
+437   0396 38 F8       	jr		C, fill2_sr1
+438   0398             	; skip 4 rows
+439   0398 7A          	ld		a, d
+440   0399 11 20 00    	ld		de, 0x0020
+441   039C 19          	add		hl, de
+442   039D 57          	ld		d, a
+443   039E             	; col N+1
+444   039E 3E 00       	ld		a, 0
+445   03A0             fill2_sr2:
+446   03A0 36 00       	ld		(hl), 0x00
+447   03A2 23          	inc		hl
+448   03A3 3C          	inc		a
+449   03A4 FE E0       	cp		0xe0
+450   03A6 38 F8       	jr		C, fill2_sr2
+451   03A8             	; skip 4 rows
+452   03A8 7A          	ld		a, d
+453   03A9 11 20 00    	ld		de, 0x0020
+454   03AC 19          	add		hl, de
+455   03AD 57          	ld		d, a
+456   03AE             	; decrease columns counter
+457   03AE 14          	inc		d
+458   03AF 7A          	ld		a, d
+459   03B0 FE 20       	cp		32
+460   03B2 38 DA       	jr		C, fill2_row
+461   03B4             fill2_end:
+462   03B4             	; disable window on RAM1
+463   03B4 DB 0A       	in		a, (_p0a_mem_man)
+464   03B6 CB 8F       	res		MEMM_RAM1EN_BIT, a
+465   03B8 D3 0A       	out		(_p0a_mem_man), a
+466   03BA                 ; return to test
+467   03BA 78              ld      a, b        ; load configuration to A
+468   03BB E6 07           and     0x07        ; extract video test number
+469   03BD 26 00           ld      h, 0
+470   03BF 6F              ld      l, a
+471   03C0 29              add     hl, hl
+472   03C1 11 6F 03        ld      de, test_ret_table_2
+473   03C4 19              add     hl, de
+474   03C5 7E              ld      a, (hl)
+475   03C6 23              inc     hl
+476   03C7 66              ld      h, (hl)
+477   03C8 6F              ld      l, a
+478   03C9 E9              jp      (hl)
+479   03CA             
+480   03CA             fill_scr_2_16c:
+481   03CA             	; enable window on RAM1
+482   03CA DB 0A       	in		a, (_p0a_mem_man)
+483   03CC CB CF       	set		MEMM_RAM1EN_BIT, a
+484   03CE D3 0A       	out		(_p0a_mem_man), a
+485   03D0             	; set RAM 1 to segment #7
+486   03D0 3E 07       	ld		a, 7
+487   03D2 D3 05       	out		(_p05_RAM1), a
+488   03D4             	; screen pointer
+489   03D4 21 00 40    	ld		hl, RAM1_WINDOW
+490   03D7 16 00       	ld		d, 0 ; columns
+491   03D9             fill3_row:
+492   03D9             	; calculate fill value
+493   03D9 7A          	ld		a, d
+494   03DA E6 0F       	and		0x0f
+495   03DC CB 27       	sla		a
+496   03DE CB 27       	sla		a
+497   03E0 CB 27       	sla		a
+498   03E2 CB 27       	sla		a
+499   03E4 5F          	ld		e, a
+500   03E5 0E 00       	ld		c, 0
+501   03E7             	; rows main
+502   03E7             fill3_sr1:
+503   03E7 79          	ld		a, c
+504   03E8 E6 0F       	and		0x0f
+505   03EA 83          	add		a, e
+506   03EB 77          	ld		(hl), a
+507   03EC 23          	inc		hl
+508   03ED 77          	ld		(hl), a
+509   03EE 23          	inc		hl
+510   03EF 77          	ld		(hl), a
+511   03F0 23          	inc		hl
+512   03F1 77          	ld		(hl), a
+513   03F2 23          	inc		hl
+514   03F3 77          	ld		(hl), a
+515   03F4 23          	inc		hl
+516   03F5 77          	ld		(hl), a
+517   03F6 23          	inc		hl
+518   03F7 77          	ld		(hl), a
+519   03F8 23          	inc		hl
+520   03F9 77          	ld		(hl), a
+521   03FA 23          	inc		hl
+522   03FB 0C          	inc		c
+523   03FC 79          	ld		a, c
+524   03FD FE 1C       	cp		0x1c
+525   03FF 38 E6       	jr		C, fill3_sr1
+526   0401             	; rows titles
+527   0401             	;ld		a, d
+528   0401             	;and		0x0f
+529   0401             	;jr		NZ, fill3_nz
+530   0401 3E 01       	ld		a, 1
+531   0403             fill3_nz:
+532   0403 5F          	ld		e, a
+533   0404 3E 00       	ld		a, 0
+534   0406             fill3_sr2:
+535   0406 73          	ld		(hl), e
+536   0407 23          	inc		hl
+537   0408 73          	ld		(hl), e
+538   0409 23          	inc		hl
+539   040A 73          	ld		(hl), e
+540   040B 23          	inc		hl
+541   040C 73          	ld		(hl), e
+542   040D 23          	inc		hl
+543   040E 73          	ld		(hl), e
+544   040F 23          	inc		hl
+545   0410 73          	ld		(hl), e
+546   0411 23          	inc		hl
+547   0412 73          	ld		(hl), e
+548   0413 23          	inc		hl
+549   0414 73          	ld		(hl), e
+550   0415 23          	inc		hl
+551   0416 3C          	inc		a
+552   0417 FE 04       	cp		0x4
+553   0419 38 EB       	jr		C, fill3_sr2
+554   041B             	; decrease columns counter
+555   041B 14          	inc		d
+556   041C 7A          	ld		a, d
+557   041D FE 40       	cp		64
+558   041F 38 B8       	jr		C, fill3_row
+559   0421             fill3_end:
+560   0421             	; disable window on RAM1
+561   0421 DB 0A       	in		a, (_p0a_mem_man)
+562   0423 CB 8F       	res		MEMM_RAM1EN_BIT, a
+563   0425 D3 0A       	out		(_p0a_mem_man), a
+564   0427                 ; return to test
+565   0427 78              ld      a, b        ; load configuration to A
+566   0428 E6 07           and     0x07        ; extract video test number
+567   042A 26 00           ld      h, 0
+568   042C 6F              ld      l, a
+569   042D 29              add     hl, hl
+570   042E 11 6F 03        ld      de, test_ret_table_2
+571   0431 19              add     hl, de
+572   0432 7E              ld      a, (hl)
+573   0433 23              inc     hl
+574   0434 66              ld      h, (hl)
+575   0435 6F              ld      l, a
+576   0436 E9              jp      (hl)
+577   0437             
+578   0437             test_ret_table_3:
+579   0437 00 00           .DW 0
+580   0439 00 00           .DW 0
+581   043B 00 00           .DW 0
+582   043D 00 00           .DW 0
+583   043F 00 00           .DW 0
+584   0441 00 00           .DW 0
+585   0443 C1 02           .DW test_3bit_end3
+586   0445 E0 02           .DW test_4bit_end3
+587   0447             
+588   0447             fill_scr_blue:
+589   0447             	; enable window on RAM1
+590   0447 DB 0A       	in		a, (_p0a_mem_man)
+591   0449 CB CF       	set		MEMM_RAM1EN_BIT, a
+592   044B D3 0A       	out		(_p0a_mem_man), a
+593   044D             	; set RAM 1 to segment #6
+594   044D 3E 06       	ld		a, 6
+595   044F D3 05       	out		(_p05_RAM1), a
+596   0451             	; screen pointer
+597   0451 21 00 40    	ld		hl, RAM1_WINDOW
+598   0454 16 00       	ld		d, 0 ; columns
+599   0456             fill4_row:
+600   0456 0E 00       	ld		c, 0
+601   0458             	; rows main
+602   0458             fill4_sr1:
+603   0458 7D          	ld		a, l
+604   0459 E6 08       	and		0x08
+605   045B FE 08       	cp		0x08
+606   045D 38 05       	jr		C, fill4_ff
+607   045F 3E 00       	ld		a, 0x00
+608   0461 C3 66 04    	jp		fill4_st
+609   0464             fill4_ff:
+610   0464 3E FF       	ld		a, 0xff
+611   0466             fill4_st:
+612   0466 77          	ld		(hl), a
+613   0467 23          	inc		hl
+614   0468 77          	ld		(hl), a
+615   0469 23          	inc		hl
+616   046A 77          	ld		(hl), a
+617   046B 23          	inc		hl
+618   046C 77          	ld		(hl), a
+619   046D 23          	inc		hl
+620   046E 77          	ld		(hl), a
+621   046F 23          	inc		hl
+622   0470 77          	ld		(hl), a
+623   0471 23          	inc		hl
+624   0472 77          	ld		(hl), a
+625   0473 23          	inc		hl
+626   0474 77          	ld		(hl), a
+627   0475 23          	inc		hl
+628   0476 0C          	inc		c
+629   0477 79          	ld		a, c
+630   0478 FE 1C       	cp		0x1c
+631   047A 38 DC       	jr		C, fill4_sr1
+632   047C             	; rows titles
+633   047C             	;ld		a, d
+634   047C             	;and		0x0f
+635   047C             	;jr		NZ, fill3_nz
+636   047C 3E 01       	ld		a, 1
+637   047E             fill4_nz:
+638   047E 1E 00       	ld		e, 0
+639   0480 3E 00       	ld		a, 0
+640   0482             fill4_sr2:
+641   0482 73          	ld		(hl), e
+642   0483 23          	inc		hl
+643   0484 73          	ld		(hl), e
+644   0485 23          	inc		hl
+645   0486 73          	ld		(hl), e
+646   0487 23          	inc		hl
+647   0488 73          	ld		(hl), e
+648   0489 23          	inc		hl
+649   048A 73          	ld		(hl), e
+650   048B 23          	inc		hl
+651   048C 73          	ld		(hl), e
+652   048D 23          	inc		hl
+653   048E 73          	ld		(hl), e
+654   048F 23          	inc		hl
+655   0490 73          	ld		(hl), e
+656   0491 23          	inc		hl
+657   0492 3C          	inc		a
+658   0493 FE 04       	cp		0x4
+659   0495 38 EB       	jr		C, fill4_sr2
+660   0497             	; decrease columns counter
+661   0497 14          	inc		d
+662   0498 7A          	ld		a, d
+663   0499 FE 40       	cp		64
+664   049B 38 B9       	jr		C, fill4_row
+665   049D             fill4_end:
+666   049D             	; disable window on RAM1
+667   049D DB 0A       	in		a, (_p0a_mem_man)
+668   049F CB 8F       	res		MEMM_RAM1EN_BIT, a
+669   04A1 D3 0A       	out		(_p0a_mem_man), a
+670   04A3                 ; return to test
+671   04A3 78              ld      a, b        ; load configuration to A
+672   04A4 E6 07           and     0x07        ; extract video test number
+673   04A6 26 00           ld      h, 0
+674   04A8 6F              ld      l, a
+675   04A9 29              add     hl, hl
+676   04AA 11 37 04        ld      de, test_ret_table_3
+677   04AD 19              add     hl, de
+678   04AE 7E              ld      a, (hl)
+679   04AF 23              inc     hl
+680   04B0 66              ld      h, (hl)
+681   04B1 6F              ld      l, a
+682   04B2 E9              jp      (hl)
+683   04B3             
+684   04B3             test_ret_table_4:
+685   04B3 00 00           .DW 0
+686   04B5 00 00           .DW 0
+687   04B7 00 00           .DW 0
+688   04B9 00 00           .DW 0
+689   04BB 00 00           .DW 0
+690   04BD 00 00           .DW 0
+691   04BF C4 02           .DW test_3bit_end4
+692   04C1 E3 02           .DW test_4bit_end4
+693   04C3             
+694   04C3             fill_scr_red:
+695   04C3             	; enable window on RAM1
+696   04C3 DB 0A       	in		a, (_p0a_mem_man)
+697   04C5 CB CF       	set		MEMM_RAM1EN_BIT, a
+698   04C7 D3 0A       	out		(_p0a_mem_man), a
+699   04C9             	; set RAM 1 to segment #2
+700   04C9 3E 02       	ld		a, 2
+701   04CB D3 05       	out		(_p05_RAM1), a
+702   04CD             	; screen pointer
+703   04CD 21 00 40    	ld		hl, RAM1_WINDOW
+704   04D0 16 00       	ld		d, 0 ; columns
+705   04D2             fill5_row:
+706   04D2 0E 00       	ld		c, 0
+707   04D4             	; rows main
+708   04D4             fill5_sr1:
+709   04D4 7D          	ld		a, l
+710   04D5 E6 10       	and		0x10
+711   04D7 FE 10       	cp		0x10
+712   04D9 38 05       	jr		C, fill5_ff
+713   04DB 3E 00       	ld		a, 0x00
+714   04DD C3 E2 04    	jp		fill5_st
+715   04E0             fill5_ff:
+716   04E0 3E FF       	ld		a, 0xff
+717   04E2             fill5_st:
+718   04E2 77          	ld		(hl), a
+719   04E3 23          	inc		hl
+720   04E4 77          	ld		(hl), a
+721   04E5 23          	inc		hl
+722   04E6 77          	ld		(hl), a
+723   04E7 23          	inc		hl
+724   04E8 77          	ld		(hl), a
+725   04E9 23          	inc		hl
+726   04EA 77          	ld		(hl), a
+727   04EB 23          	inc		hl
+728   04EC 77          	ld		(hl), a
+729   04ED 23          	inc		hl
+730   04EE 77          	ld		(hl), a
+731   04EF 23          	inc		hl
+732   04F0 77          	ld		(hl), a
+733   04F1 23          	inc		hl
+734   04F2 0C          	inc		c
+735   04F3 79          	ld		a, c
+736   04F4 FE 1C       	cp		0x1c
+737   04F6 38 DC       	jr		C, fill5_sr1
+738   04F8             	; rows titles
+739   04F8             	;ld		a, d
+740   04F8             	;and		0x0f
+741   04F8             	;jr		NZ, fill3_nz
+742   04F8 3E 01       	ld		a, 1
+743   04FA             fill5_nz:
+744   04FA 1E 00       	ld		e, 0
+745   04FC 3E 00       	ld		a, 0
+746   04FE             fill5_sr2:
+747   04FE 73          	ld		(hl), e
+748   04FF 23          	inc		hl
+749   0500 73          	ld		(hl), e
+750   0501 23          	inc		hl
+751   0502 73          	ld		(hl), e
+752   0503 23          	inc		hl
+753   0504 73          	ld		(hl), e
+754   0505 23          	inc		hl
+755   0506 73          	ld		(hl), e
+756   0507 23          	inc		hl
+757   0508 73          	ld		(hl), e
+758   0509 23          	inc		hl
+759   050A 73          	ld		(hl), e
+760   050B 23          	inc		hl
+761   050C 73          	ld		(hl), e
+762   050D 23          	inc		hl
+763   050E 3C          	inc		a
+764   050F FE 04       	cp		0x4
+765   0511 38 EB       	jr		C, fill5_sr2
+766   0513             	; decrease columns counter
+767   0513 14          	inc		d
+768   0514 7A          	ld		a, d
+769   0515 FE 40       	cp		64
+770   0517 38 B9       	jr		C, fill5_row
+771   0519             fill5_end:
+772   0519             	; disable window on RAM1
+773   0519 DB 0A       	in		a, (_p0a_mem_man)
+774   051B CB 8F       	res		MEMM_RAM1EN_BIT, a
+775   051D D3 0A       	out		(_p0a_mem_man), a
+776   051F                 ; return to test
+777   051F 78              ld      a, b        ; load configuration to A
+778   0520 E6 07           and     0x07        ; extract video test number
+779   0522 26 00           ld      h, 0
+780   0524 6F              ld      l, a
+781   0525 29              add     hl, hl
+782   0526 11 B3 04        ld      de, test_ret_table_4
+783   0529 19              add     hl, de
+784   052A 7E              ld      a, (hl)
+785   052B 23              inc     hl
+786   052C 66              ld      h, (hl)
+787   052D 6F              ld      l, a
+788   052E E9              jp      (hl)
+789   052F             
+790   052F             print_chr:
+791   052F             ; parameters:
+792   052F             ;  A - char
+793   052F             ;  iyh - column
+794   052F             ;  iyl - row
+795   052F             ;  ix - return address
+796   052F             ; usage:
+797   052F             ;  shadow registers
+798   052F D9          	exx
+799   0530             	; get character start
+800   0530 11 5F 05        ld      de, font
+801   0533 26 00       	ld		h, 0
+802   0535 6F          	ld		l, a
+803   0536 29          	add		hl, hl	; *2
+804   0537 29          	add		hl, hl	; *2
+805   0538 29          	add		hl, hl	; *2
+806   0539 19          	add		hl, de
+807   053A             	; calculate screen start
+808   053A FD 7D       	ld		a, iyl ;28
+809   053C 87          	add		a, a	; *2
+810   053D 87          	add		a, a	; *2
+811   053E 87          	add		a, a	; *2
+812   053F 5F          	ld		e, a
+813   0540 FD 7C       	ld		a, iyh ;0
+814   0542 C6 C0       	add		a, 0xc0
+815   0544 57          	ld		d, a
+816   0545             	; set count
+817   0545 01 08 00    	ld		bc, 0x0008
+818   0548 ED B0       	ldir
+819   054A D9          	exx
+820   054B DD E9       	jp		ix
+821   054D             
+822   054D             print_str:
+823   054D             ; parameters:
+824   054D             ;  de - string start (ZERO-ended)
+825   054D             ;  iyh - column
+826   054D             ;  iyl - row
+827   054D             ;  hl - return address
+828   054D DD 21 5A 05 	ld		ix, print_str_add
+829   0551             print_str_loop:
+830   0551 1A          	ld		a, (de)
+831   0552 FE 00       	cp		0
+832   0554 28 08       	jr		Z, print_str_exit
+833   0556 13          	inc		de
+834   0557 C3 2F 05    	jp		print_chr
+835   055A             print_str_add:
+836   055A FD 24       	inc		iyh
+837   055C 18 F3       	jr		print_str_loop
+838   055E             print_str_exit:
+839   055E E9          	jp		hl
+840   055F             
+841   055F             font:
+842   055F                 .db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 // 0
+842   055F 0000000000000000
+843   0567                 .db 0x00, 0x3E, 0x41, 0x55, 0x41, 0x55, 0x49, 0x3E // 1
+843   0567 003E41554155493E
+844   056F                 .db 0x00, 0x3E, 0x7F, 0x6B, 0x7F, 0x6B, 0x77, 0x3E // 2
+844   056F 003E7F6B7F6B773E
+845   0577                 .db 0x00, 0x22, 0x77, 0x7F, 0x7F, 0x3E, 0x1C, 0x08 // 3
+845   0577 0022777F7F3E1C08
+846   057F                 .db 0x00, 0x08, 0x1C, 0x3E, 0x7F, 0x3E, 0x1C, 0x08 // 4
+846   057F 00081C3E7F3E1C08
+847   0587                 .db 0x00, 0x08, 0x1C, 0x2A, 0x7F, 0x2A, 0x08, 0x1C // 5
+847   0587 00081C2A7F2A081C
+848   058F                 .db 0x00, 0x08, 0x1C, 0x3E, 0x7F, 0x3E, 0x08, 0x1C // 6
+848   058F 00081C3E7F3E081C
+849   0597                 .db 0x00, 0x00, 0x1C, 0x3E, 0x3E, 0x3E, 0x1C, 0x00 // 7
+849   0597 00001C3E3E3E1C00
+850   059F                 .db 0xFF, 0xFF, 0xE3, 0xC1, 0xC1, 0xC1, 0xE3, 0xFF // 8
+850   059F FFFFE3C1C1C1E3FF
+851   05A7                 .db 0x00, 0x00, 0x1C, 0x22, 0x22, 0x22, 0x1C, 0x00 // 9
+851   05A7 00001C2222221C00
+852   05AF                 .db 0xFF, 0xFF, 0xE3, 0xDD, 0xDD, 0xDD, 0xE3, 0xFF // a
+852   05AF FFFFE3DDDDDDE3FF
+853   05B7                 .db 0x00, 0x0F, 0x03, 0x05, 0x39, 0x48, 0x48, 0x30 // b
+853   05B7 000F030539484830
+854   05BF                 .db 0x00, 0x08, 0x3E, 0x08, 0x1C, 0x22, 0x22, 0x1C // c
+854   05BF 00083E081C22221C
+855   05C7                 .db 0x00, 0x18, 0x14, 0x10, 0x10, 0x30, 0x70, 0x60 // d
+855   05C7 0018141010307060
+856   05CF                 .db 0x00, 0x0F, 0x19, 0x11, 0x13, 0x37, 0x76, 0x60 // e
+856   05CF 000F191113377660
+857   05D7                 .db 0x00, 0x08, 0x2A, 0x1C, 0x77, 0x1C, 0x2A, 0x08 // f
+857   05D7 00082A1C771C2A08
+858   05DF                 .db 0x00, 0x60, 0x78, 0x7E, 0x7F, 0x7E, 0x78, 0x60 // 10
+858   05DF 0060787E7F7E7860
+859   05E7                 .db 0x00, 0x03, 0x0F, 0x3F, 0x7F, 0x3F, 0x0F, 0x03 // 11
+859   05E7 00030F3F7F3F0F03
+860   05EF                 .db 0x00, 0x08, 0x1C, 0x2A, 0x08, 0x2A, 0x1C, 0x08 // 12
+860   05EF 00081C2A082A1C08
+861   05F7                 .db 0x00, 0x66, 0x66, 0x66, 0x66, 0x00, 0x66, 0x66 // 13
+861   05F7 0066666666006666
+862   05FF                 .db 0x00, 0x3F, 0x65, 0x65, 0x3D, 0x05, 0x05, 0x05 // 14
+862   05FF 003F65653D050505
+863   0607                 .db 0x00, 0x0C, 0x32, 0x48, 0x24, 0x12, 0x4C, 0x30 // 15
+863   0607 000C324824124C30
+864   060F                 .db 0x00, 0x00, 0x00, 0x00, 0x00, 0x7F, 0x7F, 0x7F // 16
+864   060F 00000000007F7F7F
+865   0617                 .db 0x00, 0x08, 0x1C, 0x2A, 0x08, 0x2A, 0x1C, 0x3E // 17
+865   0617 00081C2A082A1C3E
+866   061F                 .db 0x00, 0x08, 0x1C, 0x3E, 0x7F, 0x1C, 0x1C, 0x1C // 18
+866   061F 00081C3E7F1C1C1C
+867   0627                 .db 0x00, 0x1C, 0x1C, 0x1C, 0x7F, 0x3E, 0x1C, 0x08 // 19
+867   0627 001C1C1C7F3E1C08
+868   062F                 .db 0x00, 0x08, 0x0C, 0x7E, 0x7F, 0x7E, 0x0C, 0x08 // 1a
+868   062F 00080C7E7F7E0C08
+869   0637                 .db 0x00, 0x08, 0x18, 0x3F, 0x7F, 0x3F, 0x18, 0x08 // 1b
+869   0637 0008183F7F3F1808
+870   063F                 .db 0x00, 0x00, 0x00, 0x70, 0x70, 0x70, 0x7F, 0x7F // 1c
+870   063F 0000007070707F7F
+871   0647                 .db 0x00, 0x00, 0x14, 0x22, 0x7F, 0x22, 0x14, 0x00 // 1d
+871   0647 000014227F221400
+872   064F                 .db 0x00, 0x08, 0x1C, 0x1C, 0x3E, 0x3E, 0x7F, 0x7F // 1e
+872   064F 00081C1C3E3E7F7F
+873   0657                 .db 0x00, 0x7F, 0x7F, 0x3E, 0x3E, 0x1C, 0x1C, 0x08 // 1f
+873   0657 007F7F3E3E1C1C08
+874   065F                 .db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 // 20
+874   065F 0000000000000000
+875   0667                 .db 0x00, 0x18, 0x3C, 0x3C, 0x18, 0x18, 0x00, 0x18 // 21
+875   0667 00183C3C18180018
+876   066F                 .db 0x00, 0x36, 0x36, 0x14, 0x00, 0x00, 0x00, 0x00 // 22
+876   066F 0036361400000000
+877   0677                 .db 0x00, 0x36, 0x36, 0x7F, 0x36, 0x7F, 0x36, 0x36 // 23
+877   0677 0036367F367F3636
+878   067F                 .db 0x00, 0x08, 0x1E, 0x20, 0x1C, 0x02, 0x3C, 0x08 // 24
+878   067F 00081E201C023C08
+879   0687                 .db 0x00, 0x60, 0x66, 0x0C, 0x18, 0x30, 0x66, 0x06 // 25
+879   0687 0060660C18306606
+880   068F                 .db 0x00, 0x3C, 0x66, 0x3C, 0x28, 0x65, 0x66, 0x3F // 26
+880   068F 003C663C2865663F
+881   0697                 .db 0x00, 0x18, 0x18, 0x18, 0x30, 0x00, 0x00, 0x00 // 27
+881   0697 0018181830000000
+882   069F                 .db 0x00, 0x06, 0x0C, 0x18, 0x18, 0x18, 0x0C, 0x06 // 
+882   069F 00060C1818180C06
+883   06A7                 .db 0x00, 0x60, 0x30, 0x18, 0x18, 0x18, 0x30, 0x60 // 
+883   06A7 0060301818183060
+884   06AF                 .db 0x00, 0x00, 0x36, 0x1C, 0x7F, 0x1C, 0x36, 0x00 
+884   06AF 0000361C7F1C3600
+885   06B7                 .db 0x00, 0x00, 0x08, 0x08, 0x3E, 0x08, 0x08, 0x00 
+885   06B7 000008083E080800
+886   06BF                 .db 0x00, 0x00, 0x00, 0x00, 0x30, 0x30, 0x30, 0x60 
+886   06BF 0000000030303060
+887   06C7                 .db 0x00, 0x00, 0x00, 0x00, 0x3C, 0x00, 0x00, 0x00 
+887   06C7 000000003C000000
+888   06CF                 .db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x60 
+888   06CF 0000000000006060
+889   06D7                 .db 0x00, 0x00, 0x06, 0x0C, 0x18, 0x30, 0x60, 0x00 
+889   06D7 0000060C18306000
+890   06DF                 .db 0x00, 0x3C, 0x66, 0x6E, 0x76, 0x66, 0x66, 0x3C 
+890   06DF 003C666E7666663C
+891   06E7                 .db 0x00, 0x18, 0x18, 0x38, 0x18, 0x18, 0x18, 0x7E 
+891   06E7 001818381818187E
+892   06EF                 .db 0x00, 0x3C, 0x66, 0x06, 0x0C, 0x30, 0x60, 0x7E 
+892   06EF 003C66060C30607E
+893   06F7                 .db 0x00, 0x3C, 0x66, 0x06, 0x1C, 0x06, 0x66, 0x3C 
+893   06F7 003C66061C06663C
+894   06FF                 .db 0x00, 0x0C, 0x1C, 0x2C, 0x4C, 0x7E, 0x0C, 0x0C 
+894   06FF 000C1C2C4C7E0C0C
+895   0707                 .db 0x00, 0x7E, 0x60, 0x7C, 0x06, 0x06, 0x66, 0x3C 
+895   0707 007E607C0606663C
+896   070F                 .db 0x00, 0x3C, 0x66, 0x60, 0x7C, 0x66, 0x66, 0x3C 
+896   070F 003C66607C66663C
+897   0717                 .db 0x00, 0x7E, 0x66, 0x0C, 0x0C, 0x18, 0x18, 0x18 
+897   0717 007E660C0C181818
+898   071F                 .db 0x00, 0x3C, 0x66, 0x66, 0x3C, 0x66, 0x66, 0x3C 
+898   071F 003C66663C66663C
+899   0727                 .db 0x00, 0x3C, 0x66, 0x66, 0x3E, 0x06, 0x66, 0x3C 
+899   0727 003C66663E06663C
+900   072F                 .db 0x00, 0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x00 
+900   072F 0000181800181800
+901   0737                 .db 0x00, 0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x30 
+901   0737 0000181800181830
+902   073F                 .db 0x00, 0x06, 0x0C, 0x18, 0x30, 0x18, 0x0C, 0x06 
+902   073F 00060C1830180C06
+903   0747                 .db 0x00, 0x00, 0x00, 0x3C, 0x00, 0x3C, 0x00, 0x00 
+903   0747 0000003C003C0000
+904   074F                 .db 0x00, 0x60, 0x30, 0x18, 0x0C, 0x18, 0x30, 0x60 
+904   074F 006030180C183060
+905   0757                 .db 0x00, 0x3C, 0x66, 0x06, 0x1C, 0x18, 0x00, 0x18 
+905   0757 003C66061C180018
+906   075F                 .db 0x00, 0x38, 0x44, 0x5C, 0x58, 0x42, 0x3C, 0x00 
+906   075F 0038445C58423C00
+907   0767                 .db 0x00, 0x3C, 0x66, 0x66, 0x7E, 0x66, 0x66, 0x66 
+907   0767 003C66667E666666
+908   076F                 .db 0x00, 0x7C, 0x66, 0x66, 0x7C, 0x66, 0x66, 0x7C 
+908   076F 007C66667C66667C
+909   0777                 .db 0x00, 0x3C, 0x66, 0x60, 0x60, 0x60, 0x66, 0x3C 
+909   0777 003C66606060663C
+910   077F                 .db 0x00, 0x7C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x7C 
+910   077F 007C66666666667C
+911   0787                 .db 0x00, 0x7E, 0x60, 0x60, 0x7C, 0x60, 0x60, 0x7E 
+911   0787 007E60607C60607E
+912   078F                 .db 0x00, 0x7E, 0x60, 0x60, 0x7C, 0x60, 0x60, 0x60 
+912   078F 007E60607C606060
+913   0797                 .db 0x00, 0x3C, 0x66, 0x60, 0x60, 0x6E, 0x66, 0x3C 
+913   0797 003C6660606E663C
+914   079F                 .db 0x00, 0x66, 0x66, 0x66, 0x7E, 0x66, 0x66, 0x66 
+914   079F 006666667E666666
+915   07A7                 .db 0x00, 0x3C, 0x18, 0x18, 0x18, 0x18, 0x18, 0x3C 
+915   07A7 003C18181818183C
+916   07AF                 .db 0x00, 0x1E, 0x0C, 0x0C, 0x0C, 0x6C, 0x6C, 0x38 
+916   07AF 001E0C0C0C6C6C38
+917   07B7                 .db 0x00, 0x66, 0x6C, 0x78, 0x70, 0x78, 0x6C, 0x66 
+917   07B7 00666C7870786C66
+918   07BF                 .db 0x00, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x7E 
+918   07BF 006060606060607E
+919   07C7                 .db 0x00, 0x63, 0x77, 0x7F, 0x6B, 0x63, 0x63, 0x63 
+919   07C7 0063777F6B636363
+920   07CF                 .db 0x00, 0x63, 0x73, 0x7B, 0x6F, 0x67, 0x63, 0x63 
+920   07CF 0063737B6F676363
+921   07D7                 .db 0x00, 0x3C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C 
+921   07D7 003C66666666663C
+922   07DF                 .db 0x00, 0x7C, 0x66, 0x66, 0x66, 0x7C, 0x60, 0x60 
+922   07DF 007C6666667C6060
+923   07E7                 .db 0x00, 0x3C, 0x66, 0x66, 0x66, 0x6E, 0x3C, 0x06 
+923   07E7 003C6666666E3C06
+924   07EF                 .db 0x00, 0x7C, 0x66, 0x66, 0x7C, 0x78, 0x6C, 0x66 
+924   07EF 007C66667C786C66
+925   07F7                 .db 0x00, 0x3C, 0x66, 0x60, 0x3C, 0x06, 0x66, 0x3C 
+925   07F7 003C66603C06663C
+926   07FF                 .db 0x00, 0x7E, 0x5A, 0x18, 0x18, 0x18, 0x18, 0x18 
+926   07FF 007E5A1818181818
+927   0807                 .db 0x00, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3E 
+927   0807 006666666666663E
+928   080F                 .db 0x00, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x18 
+928   080F 0066666666663C18
+929   0817                 .db 0x00, 0x63, 0x63, 0x63, 0x6B, 0x7F, 0x77, 0x63 
+929   0817 006363636B7F7763
+930   081F                 .db 0x00, 0x63, 0x63, 0x36, 0x1C, 0x36, 0x63, 0x63 
+930   081F 006363361C366363
+931   0827                 .db 0x00, 0x66, 0x66, 0x66, 0x3C, 0x18, 0x18, 0x18 
+931   0827 006666663C181818
+932   082F                 .db 0x00, 0x7E, 0x06, 0x0C, 0x18, 0x30, 0x60, 0x7E 
+932   082F 007E060C1830607E
+933   0837                 .db 0x00, 0x1E, 0x18, 0x18, 0x18, 0x18, 0x18, 0x1E 
+933   0837 001E18181818181E
+934   083F                 .db 0x00, 0x00, 0x60, 0x30, 0x18, 0x0C, 0x06, 0x00 
+934   083F 00006030180C0600
+935   0847                 .db 0x00, 0x78, 0x18, 0x18, 0x18, 0x18, 0x18, 0x78 
+935   0847 0078181818181878
+936   084F                 .db 0x00, 0x08, 0x14, 0x22, 0x41, 0x00, 0x00, 0x00 
+936   084F 0008142241000000
+937   0857                 .db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7F 
+937   0857 000000000000007F
+938   085F                 .db 0x00, 0x0C, 0x0C, 0x06, 0x00, 0x00, 0x00, 0x00 
+938   085F 000C0C0600000000
+939   0867                 .db 0x00, 0x00, 0x00, 0x3C, 0x06, 0x3E, 0x66, 0x3E 
+939   0867 0000003C063E663E
+940   086F                 .db 0x00, 0x60, 0x60, 0x60, 0x7C, 0x66, 0x66, 0x7C 
+940   086F 006060607C66667C
+941   0877                 .db 0x00, 0x00, 0x00, 0x3C, 0x66, 0x60, 0x66, 0x3C 
+941   0877 0000003C6660663C
+942   087F                 .db 0x00, 0x06, 0x06, 0x06, 0x3E, 0x66, 0x66, 0x3E 
+942   087F 000606063E66663E
+943   0887                 .db 0x00, 0x00, 0x00, 0x3C, 0x66, 0x7E, 0x60, 0x3C 
+943   0887 0000003C667E603C
+944   088F                 .db 0x00, 0x1C, 0x36, 0x30, 0x30, 0x7C, 0x30, 0x30 
+944   088F 001C3630307C3030
+945   0897                 .db 0x00, 0x00, 0x3E, 0x66, 0x66, 0x3E, 0x06, 0x3C 
+945   0897 00003E66663E063C
+946   089F                 .db 0x00, 0x60, 0x60, 0x60, 0x7C, 0x66, 0x66, 0x66 
+946   089F 006060607C666666
+947   08A7                 .db 0x00, 0x00, 0x18, 0x00, 0x18, 0x18, 0x18, 0x3C 
+947   08A7 000018001818183C
+948   08AF                 .db 0x00, 0x0C, 0x00, 0x0C, 0x0C, 0x6C, 0x6C, 0x38 
+948   08AF 000C000C0C6C6C38
+949   08B7                 .db 0x00, 0x60, 0x60, 0x66, 0x6C, 0x78, 0x6C, 0x66 
+949   08B7 006060666C786C66
+950   08BF                 .db 0x00, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18 
+950   08BF 0018181818181818
+951   08C7                 .db 0x00, 0x00, 0x00, 0x63, 0x77, 0x7F, 0x6B, 0x6B 
+951   08C7 00000063777F6B6B
+952   08CF                 .db 0x00, 0x00, 0x00, 0x7C, 0x7E, 0x66, 0x66, 0x66 
+952   08CF 0000007C7E666666
+953   08D7                 .db 0x00, 0x00, 0x00, 0x3C, 0x66, 0x66, 0x66, 0x3C 
+953   08D7 0000003C6666663C
+954   08DF                 .db 0x00, 0x00, 0x7C, 0x66, 0x66, 0x7C, 0x60, 0x60 
+954   08DF 00007C66667C6060
+955   08E7                 .db 0x00, 0x00, 0x3C, 0x6C, 0x6C, 0x3C, 0x0D, 0x0F 
+955   08E7 00003C6C6C3C0D0F
+956   08EF                 .db 0x00, 0x00, 0x00, 0x7C, 0x66, 0x66, 0x60, 0x60 
+956   08EF 0000007C66666060
+957   08F7                 .db 0x00, 0x00, 0x00, 0x3E, 0x40, 0x3C, 0x02, 0x7C 
+957   08F7 0000003E403C027C
+958   08FF                 .db 0x00, 0x00, 0x18, 0x18, 0x7E, 0x18, 0x18, 0x18 
+958   08FF 000018187E181818
+959   0907                 .db 0x00, 0x00, 0x00, 0x66, 0x66, 0x66, 0x66, 0x3E 
+959   0907 000000666666663E
+960   090F                 .db 0x00, 0x00, 0x00, 0x00, 0x66, 0x66, 0x3C, 0x18 
+960   090F 0000000066663C18
+961   0917                 .db 0x00, 0x00, 0x00, 0x63, 0x6B, 0x6B, 0x6B, 0x3E 
+961   0917 000000636B6B6B3E
+962   091F                 .db 0x00, 0x00, 0x00, 0x66, 0x3C, 0x18, 0x3C, 0x66 
+962   091F 000000663C183C66
+963   0927                 .db 0x00, 0x00, 0x00, 0x66, 0x66, 0x3E, 0x06, 0x3C 
+963   0927 00000066663E063C
+964   092F                 .db 0x00, 0x00, 0x00, 0x3C, 0x0C, 0x18, 0x30, 0x3C 
+964   092F 0000003C0C18303C
+965   0937                 .db 0x00, 0x0E, 0x18, 0x18, 0x30, 0x18, 0x18, 0x0E 
+965   0937 000E18183018180E
+966   093F                 .db 0x00, 0x18, 0x18, 0x18, 0x00, 0x18, 0x18, 0x18 
+966   093F 0018181800181818
+967   0947                 .db 0x00, 0x70, 0x18, 0x18, 0x0C, 0x18, 0x18, 0x70 
+967   0947 007018180C181870
+968   094F                 .db 0x00, 0x00, 0x00, 0x3A, 0x6C, 0x00, 0x00, 0x00 
+968   094F 0000003A6C000000
+969   0957                 .db 0x00, 0x08, 0x1C, 0x36, 0x63, 0x41, 0x41, 0x7F
+969   0957 00081C366341417F
