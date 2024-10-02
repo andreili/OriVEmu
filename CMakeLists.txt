@@ -42,7 +42,7 @@ set(PROJECT_SOURCES
         gui/mainwindow.cpp
         gui/mainwindow.h
         gui/mainwindow.ui
-        sim_wrappers/kbd.hpp
+
 
         sim_wrappers/gui_output.hpp
 )

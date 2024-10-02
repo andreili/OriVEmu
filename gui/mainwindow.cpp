@@ -33,6 +33,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     status_screen = new QLabel();
     //ui->statusbar->addPermanentWidget(status_screen);
+
+    sim->run_cont();
 }
 
 MainWindow::~MainWindow()
@@ -115,18 +117,16 @@ void MainWindow::keyPressEvent(QKeyEvent *evt)
 {
     if (this->isActiveWindow())
     {
-        //
+        sim->key_press(evt->key());
     }
-    //this->p_kbd->add_event(evt);
 }
 
 void MainWindow::keyReleaseEvent(QKeyEvent *evt)
 {
     if (this->isActiveWindow())
     {
-        //
+        sim->key_release(evt->key());
     }
-    //this->p_kbd->add_event(evt);
 }
 
 void MainWindow::closeEvent(QCloseEvent *evt)

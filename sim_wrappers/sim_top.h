@@ -1,6 +1,8 @@
 #pragma once
 #include <thread>
 #include <functional>
+#include <mutex>
+#include <set>
 
 typedef union
 {
@@ -33,9 +35,29 @@ typedef union
     uint8_t bt;
 } colors_pseudo_u;
 
+typedef union
+{
+    uint32_t dw;
+    struct
+    {
+        uint8_t PA;
+        uint8_t PB;
+        uint8_t PC;
+        uint8_t res;
+    } bt;
+} kbd_port_u;
+
 #define SCREEN_HEIGHT 256
 #define SCREEN_WIDTH_NORMAL 384
 #define SCREEN_WIDTH_WIDE 512
+
+enum class SIM_STATE
+{
+    INIT,
+    IDLE,
+    RUN,
+    RUN_STEP,
+};
 
 typedef std::function<void()> thread_cb_t;
 
@@ -43,10 +65,16 @@ class SIM_TOP
 {
 public:
     SIM_TOP(int argc, const char** argv, thread_cb_t cb_to_draw, thread_cb_t cb_resize);
+    void run_cont()  { m_state = SIM_STATE::RUN;      m_mtx.unlock(); }
+    void run_step()  { m_state = SIM_STATE::RUN_STEP; m_mtx.unlock(); }
+    void run_pause() { m_state = SIM_STATE::IDLE;     m_mtx.lock();   }
     int get_width() { return m_cur_width; }
     int get_height() { return SCREEN_HEIGHT; }
     uint32_t* get_screen() { return p_screen; }
     void stop() { m_active = false; }
+
+    void key_press(uint32_t key);
+    void key_release(uint32_t key);
 private:
     std::thread*    p_thr;
     bool            m_active;
@@ -56,11 +84,15 @@ private:
     video_mode_u*   p_video_mode;
     screen_mode_u*  p_screen_mode;
     colors_pseudo_u*p_colors_pseudo;
-    uint8_t*        p_kbd_input;
-    uint8_t*        p_kbd_output;
+    kbd_port_u*     p_kbd_input;
+    kbd_port_u*     p_kbd_output;
     thread_cb_t     m_cb_start_draw;
     thread_cb_t     m_cb_resize;
+    SIM_STATE       m_state;
+    std::mutex      m_mtx;
+    std::set<uint32_t> m_key_pressed;
 
     void thread_main();
     void screen_proc();
+    void kbd_proc();
 };

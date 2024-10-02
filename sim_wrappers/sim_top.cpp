@@ -2,6 +2,7 @@
 #include "tb.h"
 #include CONCAT5(V,TOP_NAME,_,TOP_NAME,.h)
 #include CONCAT5(V,TOP_NAME,_,orion_pro_top,.h)
+#include <QEvent>
 
 double sc_time_stamp() { return 0; }
 
@@ -12,6 +13,18 @@ double sc_time_stamp() { return 0; }
 #define RGB(b,g,r) (((r) << 16) | ((g) << 8) | (b))
 
 static TB* obj_tb;
+
+int key_matrix[8][11] = {
+    /*r D0*/  { '*',                      Qt::Key_Escape,           '+',                      Qt::Key_F1,               Qt::Key_F2,     Qt::Key_F3,        '4',           Qt::Key_F4,    Qt::Key_F5, '7',          '8' },
+    /*e D1*/  { Qt::Key_Minus,            Qt::Key_Tab,              'J' ,                     '1',                      '2',            '3',               'E',           '5',           '6',        '[',          ']' },
+    /*s D2*/  { 0,                        Qt::Key_CapsLock,         'F' ,                     'C',                      'U',            'K',               'P',           'N',           'G',        'L',          'D' },
+    /*u D3*/  { 0,                        0,                        'Q' ,                     'Y',                      'W',            'A',               'I',           'R',           'O',        'B',          0   },
+    /*l D4*/  { Qt::Key_Shift,            Qt::Key_Control,          0,                        0xDE,                     'S',            'M',               ' ',           'T',           'X',        Qt::Key_Left, '<' },
+    /*t D5*/  { '7' | Qt::KeypadModifier, '0' | Qt::KeypadModifier, '1' | Qt::KeypadModifier, '4' | Qt::KeypadModifier, Qt::Key_Plus,   Qt::Key_Backspace, Qt::Key_Right,  Qt::Key_Down, '>',        '\\',         'V' },
+    /*  D6*/  { '8' | Qt::KeypadModifier, '.',                      '2' | Qt::KeypadModifier, '5' | Qt::KeypadModifier, Qt::Key_F6,     Qt::Key_Home,      Qt::Key_Return, Qt::Key_Up,   '/',        'H',          'Z' },
+    /*  D7*/  { '9' | Qt::KeypadModifier, Qt::Key_Return,           '3' | Qt::KeypadModifier, '6' | Qt::KeypadModifier, Qt::Key_Insert, Qt::Key_End,       ';',            '?',          '-',        '0',          '9' }};
+/*scancode  D0                        D1                        D2                        D3                        D4              D5                 D6              D7            CD0         CD1           CD2 */
+
 
 static int on_step_cb(uint64_t time, TOP_CLASS* p_top)
 {
@@ -25,6 +38,7 @@ SIM_TOP::SIM_TOP(int argc, const char** argv, thread_cb_t cb_to_draw, thread_cb_
     m_cur_width = 0;
     m_cb_start_draw = cb_to_draw;
     m_cb_resize = cb_resize;
+    m_state = SIM_STATE::INIT;
     //this->p_gui = p_gui;
     //this->p_kbd = p_kbd;
     obj_tb = new TB(TOP_NAME_STR, argc, argv);
@@ -34,10 +48,21 @@ SIM_TOP::SIM_TOP(int argc, const char** argv, thread_cb_t cb_to_draw, thread_cb_
     p_video_mode    = (video_mode_u*)   &top->TOP_NAME->u_orion_core->video_mode;
     p_screen_mode   = (screen_mode_u*)  &top->TOP_NAME->u_orion_core->screen_mode;
     p_colors_pseudo = (colors_pseudo_u*)&top->TOP_NAME->u_orion_core->colors_pseudo;
-    p_kbd_input     = (uint8_t*)&top->TOP_NAME->u_orion_core->kbd_input;
-    p_kbd_output    = (uint8_t*)&top->TOP_NAME->u_orion_core->kbd_output;
+    p_kbd_input     = (kbd_port_u*)     &top->TOP_NAME->u_orion_core->kbd_input;
+    p_kbd_output    = (kbd_port_u*)     &top->TOP_NAME->u_orion_core->kbd_output;
+    p_kbd_input->dw = 0xffffffff;
     p_thr = new std::thread(&SIM_TOP::thread_main, this);
     //p_thr->join();
+}
+
+void SIM_TOP::key_press(uint32_t key)
+{
+    m_key_pressed.insert(key);
+}
+
+void SIM_TOP::key_release(uint32_t key)
+{
+    m_key_pressed.erase(key);
 }
 
 void SIM_TOP::thread_main()
@@ -55,13 +80,31 @@ void SIM_TOP::thread_main()
     uint32_t screen_cycle = 0;
     uint32_t sec_cycle = 0;
     time_t time_prev = time(0);
+    bool screen_refresh;
     while (m_active)
     {
-        obj_tb->run_steps(2);
-        //sim_time = (cycle * 1.f) / cycle_len;
+        m_mtx.lock();
+        switch (m_state)
+        {
+        case SIM_STATE::INIT:
+            m_mtx.lock();
+            break;
+        case SIM_STATE::IDLE:
+            m_mtx.lock();
+            break;
+        case SIM_STATE::RUN:
+            obj_tb->run_steps(2);
+            screen_refresh = (++screen_cycle == screen_period);
+            break;
+        case SIM_STATE::RUN_STEP:
+            obj_tb->run_steps(2);
+            screen_refresh = true;
+            break;
+        }
 
-        //p_instance->p_gui->draw(sim_time);
-        if (++screen_cycle == screen_period)
+        //sim_time = (cycle * 1.f) / cycle_len;
+        kbd_proc();
+        if (screen_refresh)
         {
             screen_proc();
             m_cb_start_draw();
@@ -75,6 +118,12 @@ void SIM_TOP::thread_main()
             printf("Sim time for 1 second: %ld\n", delta);
             sec_cycle = 0;
         }
+        if (m_state == SIM_STATE::RUN_STEP)
+        {
+            // pause to next step or state change
+            //m_mtx.lock();
+        }
+        m_mtx.unlock();
     }
 
     obj_tb->finish();
@@ -215,4 +264,31 @@ void SIM_TOP::screen_proc()
             }
         }
     }
+}
+
+void SIM_TOP::kbd_proc()
+{
+    uint32_t scancode_msk = ((p_kbd_output->bt.PC & 0x7) << 8) | p_kbd_output->bt.PB;
+    static uint32_t scancode_prev;
+    if (scancode_msk == scancode_prev)
+    {
+        return;
+    }
+    uint32_t result = 0xff;
+    for (int j=0 ; j<11 ; ++j)
+    {
+        if ((scancode_msk & (1 << j)) == 0)
+        {
+            for (int i=0 ; i<8 ; ++i)
+            {
+                int key = key_matrix[i][j];
+                if (m_key_pressed.count(key) != 0)
+                {
+                    result &= ~(1 << i);
+                }
+            }
+        }
+    }
+    p_kbd_input->bt.PA = result;
+    scancode_prev = scancode_msk;
 }
