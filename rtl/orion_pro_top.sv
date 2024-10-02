@@ -8,7 +8,14 @@ module orion_pro_top
 (
     input   wire                        i_clk,
     input   wire                        i_reset_n,
-    input   wire[7:0]                   i_cfg_sw
+    input   wire[7:0]                   i_cfg_sw,
+    // interfaces to emulator
+    output  wire[12:0]                  o_rom1_addr,
+    output  wire[19:0]                  o_rom2_addr,
+    output  wire[19:0]                  o_rom_dsk_addr,
+    input   wire[7:0]                   i_rom1_rdata,
+    input   wire[7:0]                   i_rom2_rdata,
+    input   wire[7:0]                   i_rom_dsk_rdata
 );
 
 ////
@@ -271,12 +278,10 @@ module orion_pro_top
     assign mem_req = !(mem_wrn & mem_rdn);
 
     // ROM's
-    logic[7:0] rom_1[8*1024];
-    logic[7:0] rom_2[1024*1024];
-    logic[19:0] rom2_addr_full;
-    assign cpu_rdata = (rom1_sel & (!cpu_rd_n)) ? rom_1[cpu_addr[12:0]] : 'z;
-    assign rom2_addr_full = { rom2_addr[6:0], cpu_addr[12:0] };
-    assign cpu_rdata = (rom2_sel & (!cpu_rd_n)) ? rom_2[rom2_addr_full] : 'z;
+    assign o_rom1_addr = cpu_addr[12:0];
+    assign o_rom2_addr = { rom2_addr[6:0], cpu_addr[12:0] };
+    assign cpu_rdata = (rom1_sel & (!cpu_rd_n)) ? i_rom1_rdata : 'z;
+    assign cpu_rdata = (rom2_sel & (!cpu_rd_n)) ? i_rom2_rdata : 'z;
 
     // RAM's
     logic[7:0]  ram[1024*1024*2] /* verilator public */;
@@ -321,8 +326,7 @@ module orion_pro_top
     // ROM disk
     logic[7:0]  rom_dsk_page;
     logic[15:0] rom_dsk_addr_lo;
-    logic[7:0]  rom_dsk_data, rom_rdata;
-    logic[7:0]  rom_dsk[1024*1024];
+    logic[7:0]  rom_rdata;
 	always @(posedge cpu_clk)
 	begin
 		if (~reset_n)
@@ -344,7 +348,7 @@ module orion_pro_top
         .i_wr_n         (cpu_wr_n),
         .i_cs_n         (!w_sel_io_0a),
         .i_reset        (!reset_n),
-        .i_PA           (rom_dsk_data),
+        .i_PA           (i_rom_dsk_rdata),
         .o_PA           (),
         .i_PB           (),
         .o_PB           (rom_dsk_addr_lo[7:0]),
@@ -352,15 +356,12 @@ module orion_pro_top
         .o_PC           (rom_dsk_addr_lo[15:8])
     );
     /* verilator lint_on PINCONNECTEMPTY */
-    assign rom_dsk_data = rom_dsk[{ rom_dsk_page[3:0], rom_dsk_addr_lo }];
+    assign o_rom_dsk_addr = { rom_dsk_page[3:0], rom_dsk_addr_lo };
     assign cpu_rdata = w_sel_io_0a ? rom_rdata : 'z;
 
 initial
 begin
     clk_div = '0;
-    $readmemh("./ROMs/ROM1-321.hex", rom_1);
-    $readmemh("./ROMs/ROM2-321.hex", rom_2);
-    $readmemh("./ROMs/romdisk1.hex", rom_dsk);
 end
 /* verilator lint_on  UNUSEDSIGNAL */
 

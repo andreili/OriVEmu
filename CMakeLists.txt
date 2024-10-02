@@ -42,9 +42,6 @@ set(PROJECT_SOURCES
         gui/mainwindow.cpp
         gui/mainwindow.h
         gui/mainwindow.ui
-
-
-        sim_wrappers/gui_output.hpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)

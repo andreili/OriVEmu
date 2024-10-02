@@ -34,6 +34,11 @@ MainWindow::MainWindow(QWidget *parent)
     status_screen = new QLabel();
     //ui->statusbar->addPermanentWidget(status_screen);
 
+    // TODO
+    sim->load_rom1("./ROMs/ROM1-321.BIN");
+    sim->load_rom2("./ROMs/ROM2-321.ROM");
+    sim->load_rom_disk("./ROMs/romdisk1.bin");
+
     sim->run_cont();
 }
 

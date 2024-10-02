@@ -2,6 +2,8 @@
 #include "tb.h"
 #include CONCAT5(V,TOP_NAME,_,TOP_NAME,.h)
 #include CONCAT5(V,TOP_NAME,_,orion_pro_top,.h)
+#include <iostream>
+#include <fstream>
 #include <QEvent>
 
 double sc_time_stamp() { return 0; }
@@ -34,7 +36,6 @@ static int on_step_cb(uint64_t time, TOP_CLASS* p_top)
 
 SIM_TOP::SIM_TOP(int argc, const char** argv, thread_cb_t cb_to_draw, thread_cb_t cb_resize)
 {
-    m_active = true;
     m_cur_width = 0;
     m_cb_start_draw = cb_to_draw;
     m_cb_resize = cb_resize;
@@ -44,15 +45,91 @@ SIM_TOP::SIM_TOP(int argc, const char** argv, thread_cb_t cb_to_draw, thread_cb_
     obj_tb = new TB(TOP_NAME_STR, argc, argv);
     obj_tb->init(on_step_cb);
     TOP_CLASS* top = obj_tb->get_top();
-    p_storage       = (uint8_t*)top->TOP_NAME->u_orion_core->ram.m_storage;
-    p_video_mode    = (video_mode_u*)   &top->TOP_NAME->u_orion_core->video_mode;
-    p_screen_mode   = (screen_mode_u*)  &top->TOP_NAME->u_orion_core->screen_mode;
-    p_colors_pseudo = (colors_pseudo_u*)&top->TOP_NAME->u_orion_core->colors_pseudo;
-    p_kbd_input     = (kbd_port_u*)     &top->TOP_NAME->u_orion_core->kbd_input;
-    p_kbd_output    = (kbd_port_u*)     &top->TOP_NAME->u_orion_core->kbd_output;
+    p_storage        = (uint8_t*)top->TOP_NAME->u_orion_core->ram.m_storage;
+    p_cfg_sw         = (cfg_sw_u*)       &top->TOP_NAME->cfg_sw;
+    p_rom1_raddr     = (uint32_t*)       &top->TOP_NAME->rom1_addr;
+    p_rom1_rdata     = (uint32_t*)       &top->TOP_NAME->rom1_rdata;
+    p_rom2_raddr     = (uint32_t*)       &top->TOP_NAME->rom2_addr;
+    p_rom2_rdata     = (uint32_t*)       &top->TOP_NAME->rom2_rdata;
+    p_rom_disk_raddr = (uint32_t*)       &top->TOP_NAME->rom_disk_addr;
+    p_rom_disk_rdata = (uint32_t*)       &top->TOP_NAME->rom_disk_rdata;
+    p_video_mode     = (video_mode_u*)   &top->TOP_NAME->u_orion_core->video_mode;
+    p_screen_mode    = (screen_mode_u*)  &top->TOP_NAME->u_orion_core->screen_mode;
+    p_colors_pseudo  = (colors_pseudo_u*)&top->TOP_NAME->u_orion_core->colors_pseudo;
+    p_kbd_input      = (kbd_port_u*)     &top->TOP_NAME->u_orion_core->kbd_input;
+    p_kbd_output     = (kbd_port_u*)     &top->TOP_NAME->u_orion_core->kbd_output;
     p_kbd_input->dw = 0xffffffff;
+    p_rom1 = nullptr;
+    p_rom2 = nullptr;
+    p_rom_disk = nullptr;
+    m_rom1_size = 0;
+    m_rom2_size = 0;
+    m_rom_disk_size = 0;
     p_thr = new std::thread(&SIM_TOP::thread_main, this);
-    //p_thr->join();
+
+    // TODO
+    p_cfg_sw->bt = 0b00001011;
+}
+
+SIM_TOP::~SIM_TOP()
+{
+    m_state = SIM_STATE::EXIT;
+    // wait for sim thread finished
+    p_thr->join();
+    if (p_rom1 != nullptr)
+    {
+        delete p_rom1;
+    }
+    if (p_rom2 != nullptr)
+    {
+        delete p_rom2;
+    }
+    if (p_rom_disk != nullptr)
+    {
+        delete p_rom_disk;
+    }
+}
+
+void SIM_TOP::load_rom1(std::string fn)
+{
+    if (p_rom1 != nullptr)
+    {
+        delete p_rom1;
+    }
+    std::ifstream file(fn, std::ios::binary | std::ios::ate);
+    m_rom1_size = file.tellg();
+    p_rom1 = new uint8_t[m_rom1_size];
+    file.seekg(0, std::ios::beg);
+    file.read((char*)p_rom1, m_rom1_size);
+    file.close();
+}
+
+void SIM_TOP::load_rom2(std::string fn)
+{
+    if (p_rom2 != nullptr)
+    {
+        delete p_rom2;
+    }
+    std::ifstream file(fn, std::ios::binary | std::ios::ate);
+    m_rom2_size = file.tellg();
+    p_rom2 = new uint8_t[m_rom2_size];
+    file.seekg(0, std::ios::beg);
+    file.read((char*)p_rom2, m_rom2_size);
+    file.close();
+}
+
+void SIM_TOP::load_rom_disk(std::string fn)
+{
+    if (p_rom_disk != nullptr)
+    {
+        delete p_rom_disk;
+    }
+    std::ifstream file(fn, std::ios::binary | std::ios::ate);
+    m_rom_disk_size = file.tellg();
+    p_rom_disk = new uint8_t[m_rom_disk_size];
+    file.seekg(0, std::ios::beg);
+    file.read((char*)p_rom_disk, m_rom_disk_size);
+    file.close();
 }
 
 void SIM_TOP::key_press(uint32_t key)
@@ -81,7 +158,7 @@ void SIM_TOP::thread_main()
     uint32_t sec_cycle = 0;
     time_t time_prev = time(0);
     bool screen_refresh;
-    while (m_active)
+    while (m_state != SIM_STATE::EXIT)
     {
         m_mtx.lock();
         switch (m_state)
@@ -100,10 +177,13 @@ void SIM_TOP::thread_main()
             obj_tb->run_steps(2);
             screen_refresh = true;
             break;
+        case SIM_STATE::EXIT:
+            return;
         }
 
         //sim_time = (cycle * 1.f) / cycle_len;
         kbd_proc();
+        rom_proc();
         if (screen_refresh)
         {
             screen_proc();
@@ -291,4 +371,20 @@ void SIM_TOP::kbd_proc()
     }
     p_kbd_input->bt.PA = result;
     scancode_prev = scancode_msk;
+}
+
+void SIM_TOP::rom_proc()
+{
+    if (*p_rom1_raddr < m_rom1_size)
+    {
+        *p_rom1_rdata     = p_rom1    [*p_rom1_raddr];
+    }
+    if (*p_rom2_raddr < m_rom2_size)
+    {
+        *p_rom2_rdata     = p_rom2    [*p_rom2_raddr];
+    }
+    if (*p_rom_disk_raddr < m_rom_disk_size)
+    {
+        *p_rom_disk_rdata = p_rom_disk[*p_rom_disk_raddr];
+    }
 }
