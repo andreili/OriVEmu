@@ -2,7 +2,6 @@
 #include <thread>
 #include <functional>
 #include <mutex>
-#include <set>
 
 typedef union
 {
@@ -106,7 +105,7 @@ private:
     thread_cb_t     m_cb_resize;
     SIM_STATE       m_state;
     std::mutex      m_mtx;
-    std::set<uint32_t> m_key_pressed;
+    uint32_t        m_keys_matrix[20];
 
     uint8_t*        p_rom1;
     uint32_t*       p_rom1_raddr;

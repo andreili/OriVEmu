@@ -66,6 +66,10 @@ SIM_TOP::SIM_TOP(int argc, const char** argv, thread_cb_t cb_to_draw, thread_cb_
     m_rom2_size = 0;
     m_rom_disk_size = 0;
     p_thr = new std::thread(&SIM_TOP::thread_main, this);
+    for (int i=0 ; i<20 ; ++i)
+    {
+        m_keys_matrix[i] = 0;
+    }
 
     // TODO
     p_cfg_sw->bt = 0b00001011;
@@ -134,12 +138,34 @@ void SIM_TOP::load_rom_disk(std::string fn)
 
 void SIM_TOP::key_press(uint32_t key)
 {
-    m_key_pressed.insert(key);
+    for (int j=0 ; j<11 ; ++j)
+    {
+        uint32_t line = 0;
+        for (int i=0 ; i<8 ; ++i)
+        {
+            if (key_matrix[i][j] == key)
+            {
+                line |= (1 << i);
+            }
+        }
+        m_keys_matrix[j] = line;
+    }
 }
 
 void SIM_TOP::key_release(uint32_t key)
 {
-    m_key_pressed.erase(key);
+    for (int j=0 ; j<11 ; ++j)
+    {
+        uint32_t line = 0;
+        for (int i=0 ; i<8 ; ++i)
+        {
+            if (key_matrix[i][j] == key)
+            {
+                line |= (1 << i);
+            }
+        }
+        m_keys_matrix[j] &= ~line;
+    }
 }
 
 void SIM_TOP::thread_main()
@@ -349,28 +375,18 @@ void SIM_TOP::screen_proc()
 void SIM_TOP::kbd_proc()
 {
     uint32_t scancode_msk = ((p_kbd_output->bt.PC & 0x7) << 8) | p_kbd_output->bt.PB;
-    static uint32_t scancode_prev;
-    if (scancode_msk == scancode_prev)
+    if (scancode_msk != 0b11111111111)
     {
-        return;
-    }
-    uint32_t result = 0xff;
-    for (int j=0 ; j<11 ; ++j)
-    {
-        if ((scancode_msk & (1 << j)) == 0)
+        uint32_t result = 0;
+        for (int j=0 ; j<11 ; ++j)
         {
-            for (int i=0 ; i<8 ; ++i)
+            if (((scancode_msk & (1 << j)) == 0) && (m_keys_matrix[j] != 0))
             {
-                int key = key_matrix[i][j];
-                if (m_key_pressed.count(key) != 0)
-                {
-                    result &= ~(1 << i);
-                }
+                result |= m_keys_matrix[j];
             }
         }
+        p_kbd_input->bt.PA = ~result;
     }
-    p_kbd_input->bt.PA = result;
-    scancode_prev = scancode_msk;
 }
 
 void SIM_TOP::rom_proc()
